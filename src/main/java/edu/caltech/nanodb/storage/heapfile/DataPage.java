@@ -547,6 +547,7 @@ public class DataPage {
             setSlotValue(dbPage, slot, EMPTY_SLOT);
         }
 
+
         logger.debug(String.format(
             "Tuple will get slot %d.  Final number of slots:  %d",
             slot, numSlots));
@@ -599,6 +600,12 @@ public class DataPage {
         }
 
         // TODO:  Complete this implementation.
-        throw new UnsupportedOperationException("TODO:  Implement!");
+        int len = getTupleLength(dbPage, slot);
+        int off = getSlotValue(dbPage, slot);
+
+        deleteTupleDataRange(dbPage, off, len);
+        setSlotValue(dbPage, slot, EMPTY_SLOT);
+
+//        throw new UnsupportedOperationException("TODO:  Implement!");
     }
 }

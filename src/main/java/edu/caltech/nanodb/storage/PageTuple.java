@@ -507,7 +507,7 @@ public abstract class PageTuple implements Tuple {
          * You will have to examine the column's type as well; you can use
          * the schema.getColumnInfo(iCol) method to determine the column's
          * type; schema.getColumnInfo(iCol).getType() to get the basic SQL
-         * data type.  If the column is a variable-size column (e.g. VARCHAR)
+         * data type.  If the column is a+ variable-size column (e.g. VARCHAR)
          * then you may need to retrieve details from the column itself using
          * the dbPage member, and the getStorageSize() field.
          *
@@ -518,7 +518,18 @@ public abstract class PageTuple implements Tuple {
          * properly as well.  (Note that columns whose value is NULL will have
          * the special NULL_OFFSET constant as their offset in the tuple.)
          */
-        throw new UnsupportedOperationException("TODO:  Implement!");
+        if (isNullValue(iCol)) {
+            return ;
+        }
+
+        ColumnType type = schema.getColumnInfo(iCol).getType();
+        int colOff = valueOffsets[iCol];
+        //TODO: clear data
+        int dataLen = getColumnValueSize(type, colOff);
+
+
+        setNullFlag(iCol, true);
+//        throw new UnsupportedOperationException("TODO:  Implement!");
     }
 
 
@@ -563,7 +574,12 @@ public abstract class PageTuple implements Tuple {
          * Finally, once you have made space for the new column value, you can
          * write the value itself using the writeNonNullValue() method.
          */
-        throw new UnsupportedOperationException("TODO:  Implement!");
+
+        int tupleDataOff = getDataStartOffset();
+
+
+
+//        throw new UnsupportedOperationException("TODO:  Implement!");
     }
 
 

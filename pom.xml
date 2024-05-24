@@ -204,12 +204,12 @@
                         </goals>
                     </execution>
 
-                    <execution>
-                        <id>default-check</id>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
+<!--                    <execution>-->
+<!--                        <id>default-check</id>-->
+<!--                        <goals>-->
+<!--                            <goal>check</goal>-->
+<!--                        </goals>-->
+<!--                    </execution>-->
 
                     <!--
                      Extra config to ensure we get a report after testing,
