@@ -61,6 +61,14 @@ public class HeapTupleFile implements TupleFile {
     private DBFile dbFile;
 
 
+    /* we use first_page and last_page_id to maintain the double link list page */
+    public static final int INVALID_PAGE_ID = -1;
+
+    private int firstPage;
+
+    private int lastPage;
+
+
     HeapTupleFile(StorageManager storageManager,
                   HeapTupleFileManager heapFileManager, DBFile dbFile,
                   Schema schema, TableStats stats) {
@@ -259,6 +267,7 @@ page_scan:  // So we can break out of the outer loop from inside the inner loop.
                     // Thus, we unpin the page after creating this tuple.
                     nextTup = new HeapFilePageTuple(schema, dbPage, nextSlot,
                                                     nextOffset);
+                    dbPage.unpin();
                     break page_scan;
                 }
 
@@ -268,6 +277,7 @@ page_scan:  // So we can break out of the outer loop from inside the inner loop.
             // If we got here then we reached the end of this page with no
             // tuples.  Go on to the next data-page, and start with the first
             // tuple in that page.
+            dbPage.unpin();
 
             dbPage = storageManager.loadDBPage(dbFile, dbPage.getPageNo() + 1);
             if (dbPage == null)
@@ -344,6 +354,8 @@ page_scan:  // So we can break out of the outer loop from inside the inner loop.
 
             // If we reached this point then the page doesn't have enough
             // space, so go on to the next data page.
+            dbPage.unpin();
+
             pageNo++;
         }
 
@@ -367,6 +379,10 @@ page_scan:  // So we can break out of the outer loop from inside the inner loop.
             HeapFilePageTuple.storeNewTuple(schema, dbPage, slot, tupOffset, tup);
 
         DataPage.sanityCheck(dbPage);
+
+        // create success, unpin this page
+        dbPage.unpin();
+
 
         return pageTup;
     }
@@ -399,6 +415,8 @@ page_scan:  // So we can break out of the outer loop from inside the inner loop.
 
         DBPage dbPage = ptup.getDBPage();
         DataPage.sanityCheck(dbPage);
+
+        dbPage.unpin();
     }
 
 
@@ -416,6 +434,7 @@ page_scan:  // So we can break out of the outer loop from inside the inner loop.
         DataPage.deleteTuple(dbPage, ptup.getSlot());
         DataPage.sanityCheck(dbPage);
 
+        dbPage.unpin();
         // Note that we don't invalidate the page-tuple when it is deleted,
         // so that the tuple can still be unpinned, etc.
     }

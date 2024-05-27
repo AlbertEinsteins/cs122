@@ -27,13 +27,14 @@ public class DataPage {
     /** A logging object for reporting anything interesting that happens. */
     private static Logger logger = LogManager.getLogger(DataPage.class);
 
-
     /**
      * The offset in the data page where the number of slots in the slot table
      * is stored.
      */
     public static final int OFFSET_NUM_SLOTS = 0;
 
+
+    public static final int OFFSET_NEXT_PAGE_ID = 2;
 
     /**
      * This offset-value is stored into a slot when it is empty.  It is set to

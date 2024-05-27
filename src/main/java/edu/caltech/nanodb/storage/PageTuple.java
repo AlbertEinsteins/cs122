@@ -8,6 +8,10 @@ import edu.caltech.nanodb.relations.ColumnType;
 import edu.caltech.nanodb.relations.Schema;
 import edu.caltech.nanodb.relations.SQLDataType;
 import edu.caltech.nanodb.relations.Tuple;
+import edu.caltech.nanodb.storage.heapfile.DataPage;
+import edu.caltech.nanodb.storage.heapfile.HeaderPage;
+
+import javax.xml.crypto.Data;
 
 
 /**
@@ -522,14 +526,18 @@ public abstract class PageTuple implements Tuple {
             return ;
         }
 
+        setNullFlag(iCol, true);
+
+        //TODO: clear data
         ColumnType type = schema.getColumnInfo(iCol).getType();
         int colOff = valueOffsets[iCol];
-        //TODO: clear data
         int dataLen = getColumnValueSize(type, colOff);
 
+        DataPage.deleteTupleDataRange(dbPage, colOff, dataLen);
 
-        setNullFlag(iCol, true);
-//        throw new UnsupportedOperationException("TODO:  Implement!");
+        pageOffset += colOff;
+        // update col offsets
+        computeValueOffsets();
     }
 
 
@@ -575,11 +583,49 @@ public abstract class PageTuple implements Tuple {
          * write the value itself using the writeNonNullValue() method.
          */
 
-        int tupleDataOff = getDataStartOffset();
+        ColumnInfo info = schema.getColumnInfo(iCol);
+        ColumnType type = info.getType();
 
+        // ensure space first
+        int valLen = 0;
+        if (type.getBaseType() == SQLDataType.VARCHAR) {
+            String strVal = TypeConverter.getStringValue(value);
+            valLen = strVal.length();
+        }
 
+        if (getNullFlag(iCol)) { // need expand the tuple size
+            int needSpace = getStorageSize(type, valLen);
 
-//        throw new UnsupportedOperationException("TODO:  Implement!");
+            int offset = endOffset;
+            for (int i = 0; i < schema.numColumns(); i++) {
+                if (!getNullFlag(i)) {
+                    offset = valueOffsets[i];
+                    break;
+                }
+            }
+
+            // move the offset before to offset - len
+            insertTupleDataRange(offset, needSpace);
+        } else if (type.getBaseType() == SQLDataType.VARCHAR) {
+            // if not enough, insert
+            // if has more, delete
+            int needSpace = getStorageSize(type, valLen);
+            int originSize = getColumnValueSize(type, valueOffsets[iCol]);
+            int diff = needSpace - originSize;
+
+            if (diff > 0) {
+                insertTupleDataRange(valueOffsets[iCol], diff);
+                pageOffset -= diff;
+                computeValueOffsets();
+            } else if (diff < 0){
+                deleteTupleDataRange(valueOffsets[iCol], diff);
+                pageOffset -= diff;
+                computeValueOffsets();
+            }
+        }
+
+        // now, we could write it
+        writeNonNullValue(dbPage, valueOffsets[iCol], type, value);
     }
 
 
