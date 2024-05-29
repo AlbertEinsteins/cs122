@@ -31,10 +31,10 @@ public class DataPage {
      * The offset in the data page where the number of slots in the slot table
      * is stored.
      */
-    public static final int OFFSET_NUM_SLOTS = 0;
+    public static final int OFFSET_NEXT_PAGE_ID = 0;
 
+    public static final int OFFSET_NUM_SLOTS = 4;
 
-    public static final int OFFSET_NEXT_PAGE_ID = 2;
 
     /**
      * This offset-value is stored into a slot when it is empty.  It is set to
@@ -53,11 +53,12 @@ public class DataPage {
      */
     public static void initNewPage(DBPage dbPage) {
         setNumSlots(dbPage, 0);
+        setNextPageId(dbPage, HeapTupleFile.INVALID_PAGE_ID);
     }
 
 
     public static int getSlotOffset(int slot) {
-        return (1 + slot) * 2;
+        return OFFSET_NUM_SLOTS + (1 + slot) * 2;
     }
 
 
@@ -88,6 +89,15 @@ public class DataPage {
         dbPage.writeShort(OFFSET_NUM_SLOTS, numSlots);
     }
 
+
+    /*  set a new attribute, means nextPageId   */
+    public static void setNextPageId(DBPage dbPage, int pageId) {
+        dbPage.writeInt(OFFSET_NEXT_PAGE_ID, pageId);
+    }
+
+    public static int getNextPageId(DBPage dbPage) {
+        return dbPage.readInt(OFFSET_NEXT_PAGE_ID);
+    }
 
     /**
      * This static helper function returns the index where the slot list ends in
@@ -163,7 +173,7 @@ public class DataPage {
                 "Slots occur at even indexes (each slot is a short).");
         }
 
-        int slot = (offset - 2) / 2;
+        int slot = (offset - OFFSET_NUM_SLOTS) / 2;
         int numSlots = getNumSlots(dbPage);
 
         if (slot < 0 || slot >= numSlots) {

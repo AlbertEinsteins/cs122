@@ -535,8 +535,8 @@ public abstract class PageTuple implements Tuple {
 
         DataPage.deleteTupleDataRange(dbPage, colOff, dataLen);
 
-        pageOffset += colOff;
-        // update col offsets
+        pageOffset += dataLen;
+        // update col
         computeValueOffsets();
     }
 
@@ -593,11 +593,12 @@ public abstract class PageTuple implements Tuple {
             valLen = strVal.length();
         }
 
-        if (getNullFlag(iCol)) { // need expand the tuple size
+        if (getNullFlag(iCol)) { // need expand the tuple
+            setNullFlag(iCol, false);// size
             int needSpace = getStorageSize(type, valLen);
 
             int offset = endOffset;
-            for (int i = 0; i < schema.numColumns(); i++) {
+            for (int i = iCol + 1; i < schema.numColumns(); i++) {
                 if (!getNullFlag(i)) {
                     offset = valueOffsets[i];
                     break;
@@ -606,6 +607,8 @@ public abstract class PageTuple implements Tuple {
 
             // move the offset before to offset - len
             insertTupleDataRange(offset, needSpace);
+            pageOffset -= needSpace;
+            computeValueOffsets();
         } else if (type.getBaseType() == SQLDataType.VARCHAR) {
             // if not enough, insert
             // if has more, delete
@@ -617,8 +620,9 @@ public abstract class PageTuple implements Tuple {
                 insertTupleDataRange(valueOffsets[iCol], diff);
                 pageOffset -= diff;
                 computeValueOffsets();
+
             } else if (diff < 0){
-                deleteTupleDataRange(valueOffsets[iCol], diff);
+                deleteTupleDataRange(valueOffsets[iCol], -diff);
                 pageOffset -= diff;
                 computeValueOffsets();
             }

@@ -24,6 +24,8 @@ import edu.caltech.nanodb.storage.TupleFile;
 import edu.caltech.nanodb.storage.TupleFileException;
 import edu.caltech.nanodb.storage.TupleFileManager;
 
+import javax.xml.crypto.Data;
+
 
 /**
  * This class implements the TupleFile interface for heap files.
@@ -64,9 +66,9 @@ public class HeapTupleFile implements TupleFile {
     /* we use first_page and last_page_id to maintain the double link list page */
     public static final int INVALID_PAGE_ID = -1;
 
-    private int firstPage;
+    private int firstPageId;
 
-    private int lastPage;
+    private int lastPageId;
 
 
     HeapTupleFile(StorageManager storageManager,
@@ -92,6 +94,9 @@ public class HeapTupleFile implements TupleFile {
         this.dbFile = dbFile;
         this.schema = schema;
         this.stats = stats;
+
+        firstPageId = INVALID_PAGE_ID;
+        lastPageId = INVALID_PAGE_ID;
     }
 
 
@@ -152,8 +157,6 @@ page_scan:  // So we can break out of the outer loop from inside the inner one
                 // pin-count by one, so we decrement the page pin-count
                 // before breaking out.
                 first = new HeapFilePageTuple(schema, dbPage, iSlot, offset);
-                dbPage.unpin();
-
                 break page_scan;
             }
 
@@ -267,7 +270,6 @@ page_scan:  // So we can break out of the outer loop from inside the inner loop.
                     // Thus, we unpin the page after creating this tuple.
                     nextTup = new HeapFilePageTuple(schema, dbPage, nextSlot,
                                                     nextOffset);
-                    dbPage.unpin();
                     break page_scan;
                 }
 
@@ -322,52 +324,78 @@ page_scan:  // So we can break out of the outer loop from inside the inner loop.
         // The "+ 2" is for the case where we need a new slot entry as well.
         if (tupSize + 2 > dbFile.getPageSize()) {
             throw new TupleFileException("Tuple size " + tupSize +
-                " is larger than page size " + dbFile.getPageSize() + ".");
+                    " is larger than page size " + dbFile.getPageSize() + ".");
         }
 
         // Search for a page to put the tuple in.  If we hit the end of the
         // data file, create a new page.
-        int pageNo = 1;
-        DBPage dbPage;
-        while (true) {
-            // Try to load the page without creating a new one.
-            dbPage = storageManager.loadDBPage(dbFile, pageNo);
-            if (dbPage == null) {
-                // Couldn't load the current page, because it doesn't exist.
-                // Break out of the loop.
-                logger.debug("Reached end of data file without finding " +
-                             "space for new tuple.");
-                break;
-            }
+//        int pageNo = 1;
+//        DBPage dbPage;
+//        while (true) {
+//            // Try to load the page without creating a new one.
+//            dbPage = storageManager.loadDBPage(dbFile, pageNo);
+//            if (dbPage == null) {
+//                // Couldn't load the current page, because it doesn't exist.
+//                // Break out of the loop.
+//                logger.debug("Reached end of data file without finding " +
+//                             "space for new tuple.");
+//                break;
+//            }
+//
+//            int freeSpace = DataPage.getFreeSpaceInPage(dbPage);
+//            logger.trace(String.format("Page %d has %d bytes of free space.",
+//                         pageNo, freeSpace));
+//
+//            // If this page has enough free space to add a new tuple, break
+//            // out of the loop.  (The "+ 2" is for the new slot entry we will
+//            // also need.)
+//            if (freeSpace >= tupSize + 2) {
+//                logger.debug("Found space for new tuple in page " + pageNo + ".");
+//                break;
+//            }
+//
+//            // If we reached this point then the page doesn't have enough
+//            // space, so go on to the next data page.
+//            dbPage.unpin();
+//
+//            pageNo++;
+//        }
 
-            int freeSpace = DataPage.getFreeSpaceInPage(dbPage);
-            logger.trace(String.format("Page %d has %d bytes of free space.",
-                         pageNo, freeSpace));
+        int pageNo = lastPageId;
+        DBPage dbPage = null;
 
-            // If this page has enough free space to add a new tuple, break
-            // out of the loop.  (The "+ 2" is for the new slot entry we will
-            // also need.)
-            if (freeSpace >= tupSize + 2) {
-                logger.debug("Found space for new tuple in page " + pageNo + ".");
-                break;
-            }
-
-            // If we reached this point then the page doesn't have enough
-            // space, so go on to the next data page.
-            dbPage.unpin();
-
-            pageNo++;
-        }
-
-        if (dbPage == null) {
-            // Try to create a new page at the end of the file.  In this
-            // circumstance, pageNo is *just past* the last page in the data
-            // file.
+        if (lastPageId == INVALID_PAGE_ID) {
+            pageNo = 1;
             logger.debug("Creating new page " + pageNo + " to store new tuple.");
             dbPage = storageManager.loadDBPage(dbFile, pageNo,
-                /* create */ true);
+                    /* create */ true);
             DataPage.initNewPage(dbPage);
+
+            firstPageId = pageNo;
+            lastPageId = pageNo;
+        } else {
+            dbPage = storageManager.loadDBPage(dbFile, pageNo);
+            int freeSpace = DataPage.getFreeSpaceInPage(dbPage);
+            logger.trace(String.format("Page %d has %d bytes of free space.",
+                    pageNo, freeSpace));
+
+            if (freeSpace <= tupSize + 2) {
+                // need create new page
+                // Try to create a new page at the end of the file.  In this
+                // circumstance, pageNo is *just past* the last page in the data
+                // file.
+
+                DBPage nextPage = storageManager.loadDBPage(dbFile, pageNo + 1, true);
+                DataPage.initNewPage(nextPage);
+
+                DataPage.setNextPageId(dbPage, pageNo + 1);
+                lastPageId = pageNo + 1;
+
+                dbPage.unpin();
+                dbPage = nextPage;
+            }
         }
+
 
         int slot = DataPage.allocNewTuple(dbPage, tupSize);
         int tupOffset = DataPage.getSlotValue(dbPage, slot);
