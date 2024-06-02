@@ -2,15 +2,23 @@ package edu.caltech.nanodb.queryeval;
 
 
 import edu.caltech.nanodb.expressions.Expression;
+import edu.caltech.nanodb.expressions.ExpressionProcessor;
+import edu.caltech.nanodb.expressions.FunctionCall;
+import edu.caltech.nanodb.functions.AggregateFunction;
+import edu.caltech.nanodb.functions.Function;
+import edu.caltech.nanodb.functions.SimpleFunction;
 import edu.caltech.nanodb.plannodes.*;
 import edu.caltech.nanodb.queryast.FromClause;
 import edu.caltech.nanodb.queryast.SelectClause;
+import edu.caltech.nanodb.queryast.SelectValue;
 import edu.caltech.nanodb.relations.TableInfo;
 import edu.caltech.nanodb.storage.StorageManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -61,11 +69,6 @@ public class SimplePlanner implements Planner {
                 "Not implemented:  enclosing queries");
         }
 
-        if (!selClause.isTrivialProject()) {
-            // a simple constant project
-            plannode = new ProjectNode(selClause.getSelectValues());
-        }
-
         FromClause fromClause = selClause.getFromClause();
         if (fromClause != null) {
             if (!fromClause.isBaseTable()) {
@@ -76,7 +79,12 @@ public class SimplePlanner implements Planner {
             // set simple table scan
             TableInfo tableInfo = storageManager.getTableManager().openTable(fromClause.getTableName());
             plannode = new FileScanNode(tableInfo, null);
+
+            if (fromClause.isRenamed()) {
+                plannode = new RenameNode(plannode, fromClause.getResultName());
+            }
         }
+
 
         // add where
         Expression whereExpr = selClause.getWhereExpr();
@@ -84,11 +92,42 @@ public class SimplePlanner implements Planner {
             plannode = new SimpleFilterNode(plannode, whereExpr);
         }
 
+        // group by or/and having
+        List<Expression> groupByExpr = selClause.getGroupByExprs();
+        if (groupByExpr != null && !groupByExpr.isEmpty()) {
+            Map<String, FunctionCall> funcs = new HashMap<>();
+
+            for (SelectValue sv : selClause.getSelectValues()) {
+                if (!sv.isExpression()) {
+                    continue;
+                }
+
+//                Expression e = sv.isSimpleColumnValue();
+                Expression expr = sv.getExpression();
+                if (expr instanceof FunctionCall) {
+                    FunctionCall fc = (FunctionCall) expr;
+                    Function f = fc.getFunction();
+                    if (f instanceof AggregateFunction) {
+                        funcs.put(fc.getColumnInfo(selClause.getSchema()).getName(), fc);
+                    }
+                }
+
+            }
+
+            plannode = new HashedGroupAggregateNode(plannode, groupByExpr, funcs);
+        }
+
+        // order by clause
+
+        //
+
+        if (!selClause.isTrivialProject()) {
+            // a simple constant project
+            plannode = new ProjectNode(plannode, selClause.getSelectValues());
+        }
+
         plannode.prepare();
         return plannode;
-//        plannode = PlanUtils.addPredicateToPlan()
-//        return makeSimpleSelect(fromClause.getTableName(),
-//            selClause.getWhereExpr(), null);
     }
 
 

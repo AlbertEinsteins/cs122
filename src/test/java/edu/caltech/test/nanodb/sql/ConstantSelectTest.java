@@ -23,11 +23,31 @@ public class ConstantSelectTest extends SqlTestCase {
     public void basicSelectAnd() {
 
         try {
-            super.beforeClass();
-            tryDoCommand("select * from test_simple_selects");
-            var r = tryDoCommand("select * from test_simple_selects where a>1");
+//            tryDoCommand("select * from test_simple_selects");
+            var r = tryDoCommand("select t.a, t.b  from test_simple_selects as t where a>1");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
+
+    public void basicGroupBy() {
+
+        try {
+//            tryDoCommand("select * from test_simple_selects");
+            var r = tryDoCommand("select t.a, t.b, count(t.a)  from test_simple_selects as t group by t.a");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void basicGroupByAndHaving() {
+
+        try {
+//            tryDoCommand("select * from test_simple_selects");
+            var r = tryDoCommand("select t.a, t.b  from test_simple_selects as t where a>1");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }
