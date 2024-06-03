@@ -2,9 +2,11 @@ package edu.caltech.nanodb.plannodes;
 
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import edu.caltech.nanodb.queryast.SelectValue;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
 
@@ -32,7 +34,9 @@ import edu.caltech.nanodb.relations.Schema;
  */
 public abstract class GroupAggregateNode extends PlanNode {
 
-    /** A logging object for reporting anything interesting that happens. */
+    /**
+     * A logging object for reporting anything interesting that happens.
+     */
     private static Logger logger = LogManager.getLogger(GroupAggregateNode.class);
 
 
@@ -50,6 +54,9 @@ public abstract class GroupAggregateNode extends PlanNode {
      */
     protected List<Expression> groupByExprs;
 
+    protected List<SelectValue> selectList;
+
+    protected Map<String, Integer> groupByCol2Idx;
 
     /**
      * A list of one or more aggregate functions to compute over the input
@@ -66,7 +73,8 @@ public abstract class GroupAggregateNode extends PlanNode {
 
 
     protected GroupAggregateNode(PlanNode subplan,
-        List<Expression> groupByExprs, Map<String, FunctionCall> aggregates) {
+                                 List<Expression> groupByExprs, Map<String, FunctionCall> aggregates,
+                                 List<SelectValue> selectList) {
 
         super(subplan);
 
@@ -76,6 +84,9 @@ public abstract class GroupAggregateNode extends PlanNode {
         if (aggregates == null)
             throw new IllegalArgumentException("aggregates cannot be null");
 
+        if (selectList == null) {
+            throw new IllegalArgumentException("selectList cannot be null");
+        }
         /*
         if (aggregates.size() == 0) {
             throw new IllegalArgumentException("aggregates must specify at " +
@@ -85,6 +96,7 @@ public abstract class GroupAggregateNode extends PlanNode {
 
         this.groupByExprs = groupByExprs;
         this.aggregates = aggregates;
+        this.selectList = selectList;
     }
 
 
@@ -100,11 +112,16 @@ public abstract class GroupAggregateNode extends PlanNode {
         schema = new Schema();
         stats = new ArrayList<ColumnStats>();
         int numTuples = 1;
-
+        /*
+        Because the group by may not appear in select list,
+        so we need to use selectList to ensure the final output schema
+        */
         // Add columns based on the GROUP BY expression and SELECT values.
         // After grouping, the only columns that appear in the result are those
         // specified by GROUP BY and new ones containing aggregates.
+
         for (Expression expr : groupByExprs) {
+
             ColumnInfo colInfo = expr.getColumnInfo(inputSchema);
             schema.addColumnInfo(colInfo);
 
@@ -119,13 +136,12 @@ public abstract class GroupAggregateNode extends PlanNode {
                 ColumnStats colStat = inputStats.get(colIndex);
                 numTuples *= colStat.getNumUniqueValues();
                 colStat.setNumNullValues(
-                    (int) Math.signum(colStat.getNumNullValues()));
+                        (int) Math.signum(colStat.getNumNullValues()));
                 stats.add(colStat);
-            }
-            else {
+            } else {
                 throw new UnsupportedOperationException("NanoDB does not " +
-                    "yet support GROUP BY expressions that are not simple " +
-                    "column references; got " + expr);
+                        "yet support GROUP BY expressions that are not simple " +
+                        "column references; got " + expr);
             }
         }
 
@@ -146,7 +162,7 @@ public abstract class GroupAggregateNode extends PlanNode {
             // Compute statistics for the aggregate column.
 
             if (aggFn instanceof MinMaxAggregate && args.size() == 1 &&
-                args.get(0) instanceof ColumnValue) {
+                    args.get(0) instanceof ColumnValue) {
 
                 // We can be a bit more clever with MIN(a) and MAX(a):  the
                 // min and max must come from the set of existing values, so
@@ -161,8 +177,7 @@ public abstract class GroupAggregateNode extends PlanNode {
                 int numUniqueValues = inputStats.get(colIndex).getNumUniqueValues();
 
                 colStat.setNumUniqueValues(Math.min(numUniqueValues, numTuples));
-            }
-            else {
+            } else {
                 // For anything else, just guess that the aggregate function
                 // will produces a different value for each group.
                 colStat.setNumUniqueValues(numTuples);
@@ -174,10 +189,18 @@ public abstract class GroupAggregateNode extends PlanNode {
 
         estimatedNumTuples = numTuples;
 
+
+        // compute column in group by where the idx of it in select idx
+        groupByCol2Idx = new HashMap<>();
+        for (int idx = 0; idx < groupByExprs.size(); idx ++) {
+            groupByCol2Idx.put(groupByExprs.get(idx).getColumnInfo(schema).getName(), idx);
+        }
+
         logger.info("Grouping/aggregate node schema:  " + schema);
         logger.info("Grouping/aggregate node stats:  " + stats);
         logger.info("Grouping/aggregate node estimated tuples:  " +
-                    estimatedNumTuples);
+                estimatedNumTuples);
+
     }
 
 
@@ -195,8 +218,8 @@ public abstract class GroupAggregateNode extends PlanNode {
      * </p>
      *
      * @return a {@code TupleLiteral} object containing the results of
-     *         evaluating the group-by expressions, or {@code null} if there
-     *         are no group-by expressions for this node.
+     * evaluating the group-by expressions, or {@code null} if there
+     * are no group-by expressions for this node.
      */
     protected TupleLiteral evaluateGroupByExprs() {
         if (groupByExprs.isEmpty())
@@ -233,12 +256,11 @@ public abstract class GroupAggregateNode extends PlanNode {
      * environment has already been properly initialized before it is called.
      *
      * @param groupAggregates the collection of aggregates to update
-     *
      * @throws ExpressionException if an error is encountered while evaluating
-     *         expressions for the aggregate operations.
+     *                             expressions for the aggregate operations.
      */
     protected void updateAggregates(Map<String, FunctionCall> groupAggregates)
-        throws ExpressionException {
+            throws ExpressionException {
         for (String name : groupAggregates.keySet()) {
             FunctionCall call = groupAggregates.get(name);
             AggregateFunction aggFn = (AggregateFunction) call.getFunction();
@@ -246,7 +268,7 @@ public abstract class GroupAggregateNode extends PlanNode {
 
             if (args.size() != 1) {
                 throw new ExpressionException("Aggregate functions " +
-                    "currently require exactly one argument.");
+                        "currently require exactly one argument.");
             }
             Expression arg = args.get(0);
 
@@ -260,24 +282,40 @@ public abstract class GroupAggregateNode extends PlanNode {
 
 
     protected TupleLiteral generateOutputTuple(TupleLiteral groupValues,
-        Map<String, FunctionCall> groupAggregates) {
+                                               Map<String, FunctionCall> groupAggregates) {
 
         // logger.info("Group values:  " + groupValues);
 
         // Construct the result tuple from the group, and from the
         // computed aggregate values.
-        TupleLiteral result = new TupleLiteral();
-        if (groupValues != null) {
-            result.appendTuple(groupValues);
-        }
 
         // TODO:  Add the aggregate values in an order that matches what
         //        the grouping/aggregate plan node must output.
+        ArrayList<Object> aggValues = new ArrayList<>();
+
         for (String name : groupAggregates.keySet()) {
             FunctionCall fnCall = groupAggregates.get(name);
             AggregateFunction aggFn = (AggregateFunction) fnCall.getFunction();
 
-            result.addValue(aggFn.getResult());
+            aggValues.add(aggFn.getResult());
+        }
+
+        int aggIdx = 0;
+        TupleLiteral result = new TupleLiteral();
+
+        for (SelectValue sv : selectList) {
+            if (!sv.isExpression()) {
+                continue;
+            }
+
+            Expression expr = sv.getExpression();
+            if (expr instanceof FunctionCall) {
+                result.addValue(aggValues.get(aggIdx++));
+            } else {
+                // common column
+                String colName = expr.getColumnInfo(inputSchema).getName();
+                result.addValue(groupValues.getColumnValue(groupByCol2Idx.get(colName)));
+            }
         }
 
         return result;

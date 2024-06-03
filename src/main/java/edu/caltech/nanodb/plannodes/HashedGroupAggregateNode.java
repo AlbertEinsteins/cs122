@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import edu.caltech.nanodb.queryast.SelectValue;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.LogManager;
 
@@ -39,8 +40,9 @@ public class HashedGroupAggregateNode extends GroupAggregateNode {
 
 
     public HashedGroupAggregateNode(PlanNode subplan,
-        List<Expression> groupByExprs, Map<String, FunctionCall> aggregates) {
-        super(subplan, groupByExprs, aggregates);
+        List<Expression> groupByExprs, Map<String, FunctionCall> aggregates,
+                                    List<SelectValue> selectList) {
+        super(subplan, groupByExprs, aggregates, selectList);
     }
 
 

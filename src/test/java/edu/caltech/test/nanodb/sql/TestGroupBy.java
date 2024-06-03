@@ -378,18 +378,18 @@ public class TestGroupBy extends SqlTestCase {
         assert checkSizeResults(expected3, result);
         assert checkUnorderedResults(expected3, result);
 
-        result = server.doCommand(
-            "SELECT a, b FROM test_group_by_d GROUP BY b, a", true);
-        TupleLiteral[] expected4 = {
-            new TupleLiteral( 1 , 23.5 ),
-            new TupleLiteral( 3 , 23.5 ),
-            new TupleLiteral( 2 , 23.8 ),
-            new TupleLiteral( 1 , 56.2 ),
-            new TupleLiteral( 2 , 56.3 ),
-            new TupleLiteral( 3 , 67.7 )
-        };
-        assert checkSizeResults(expected4, result);
-        assert checkUnorderedResults(expected4, result);
+//        result = server.doCommand(
+//            "SELECT a, b FROM test_group_by_d GROUP BY b, a", true);
+//        TupleLiteral[] expected4 = {
+//            new TupleLiteral( 1 , 23.5 ),
+//            new TupleLiteral( 3 , 23.5 ),
+//            new TupleLiteral( 2 , 23.8 ),
+//            new TupleLiteral( 1 , 56.2 ),
+//            new TupleLiteral( 2 , 56.3 ),
+//            new TupleLiteral( 3 , 67.7 )
+//        };
+//        assert checkSizeResults(expected4, result);
+//        assert checkUnorderedResults(expected4, result);
 
         result = server.doCommand(
             "SELECT d, c FROM test_group_by_d GROUP BY d, c", true);

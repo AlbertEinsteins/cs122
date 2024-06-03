@@ -24,7 +24,7 @@ public class ConstantSelectTest extends SqlTestCase {
 
         try {
 //            tryDoCommand("select * from test_simple_selects");
-            var r = tryDoCommand("select t.a, t.b  from test_simple_selects as t where a>1");
+            var r = tryDoCommand("select t.a, t.b from test_simple_selects as t where a>1");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -34,7 +34,7 @@ public class ConstantSelectTest extends SqlTestCase {
 
         try {
 //            tryDoCommand("select * from test_simple_selects");
-            var r = tryDoCommand("select t.a, t.b, count(t.a)  from test_simple_selects as t group by t.a");
+            var r = tryDoCommand("select t.a, t.b, count(t.a), max(t.a) from test_simple_selects as t group by t.a, t.b");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -44,7 +44,7 @@ public class ConstantSelectTest extends SqlTestCase {
 
         try {
 //            tryDoCommand("select * from test_simple_selects");
-            var r = tryDoCommand("select t.a, t.b  from test_simple_selects as t where a>1");
+            var r = tryDoCommand("select t.a, count(t.a) from test_simple_selects as t where a>1 group by t.a");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

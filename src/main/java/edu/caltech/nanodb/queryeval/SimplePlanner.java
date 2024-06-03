@@ -17,6 +17,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -83,6 +84,8 @@ public class SimplePlanner implements Planner {
             if (fromClause.isRenamed()) {
                 plannode = new RenameNode(plannode, fromClause.getResultName());
             }
+        } else {  //means it's a constant select
+            plannode = new ProjectNode(selClause.getSelectValues());
         }
 
 
@@ -93,41 +96,51 @@ public class SimplePlanner implements Planner {
         }
 
         // group by or/and having
-        List<Expression> groupByExpr = selClause.getGroupByExprs();
-        if (groupByExpr != null && !groupByExpr.isEmpty()) {
-            Map<String, FunctionCall> funcs = new HashMap<>();
-
-            for (SelectValue sv : selClause.getSelectValues()) {
-                if (!sv.isExpression()) {
-                    continue;
-                }
-
-//                Expression e = sv.isSimpleColumnValue();
-                Expression expr = sv.getExpression();
-                if (expr instanceof FunctionCall) {
-                    FunctionCall fc = (FunctionCall) expr;
-                    Function f = fc.getFunction();
-                    if (f instanceof AggregateFunction) {
-                        funcs.put(fc.getColumnInfo(selClause.getSchema()).getName(), fc);
-                    }
-                }
-
-            }
-
-            plannode = new HashedGroupAggregateNode(plannode, groupByExpr, funcs);
+        if (selClause.getHavingExpr() != null || !selClause.getGroupByExprs().isEmpty() || hasAggClause(selClause)) {
+            plannode = planAgg(selClause, plannode);
         }
 
         // order by clause
 
-        //
-
-        if (!selClause.isTrivialProject()) {
-            // a simple constant project
-            plannode = new ProjectNode(plannode, selClause.getSelectValues());
-        }
 
         plannode.prepare();
         return plannode;
+    }
+
+
+    private boolean hasAggClause(SelectClause selectClause) {
+        boolean hasAgg = false;
+        for (SelectValue sv : selectClause.getSelectValues()) {
+            Expression expr = sv.getExpression();
+            if (expr instanceof FunctionCall) {
+                hasAgg = true;
+                break;
+            }
+        }
+        return hasAgg;
+    }
+
+
+    public PlanNode planAgg(SelectClause selClause, PlanNode child) {
+        List<Expression> groupByExpr = selClause.getGroupByExprs();
+        Map<String, FunctionCall> aggs = new LinkedHashMap<>();
+
+        for (SelectValue sv : selClause.getSelectValues()) {
+            if (!sv.isExpression()) {
+                continue;
+            }
+
+            Expression expr = sv.getExpression();
+            if (expr instanceof FunctionCall) {
+                FunctionCall fc = (FunctionCall) expr;
+                Function f = fc.getFunction();
+                if (f instanceof AggregateFunction) {
+                    aggs.put(fc.getColumnInfo(selClause.getFromSchema()).getName(), fc);
+                }
+            }
+        }
+
+        return new HashedGroupAggregateNode(child, groupByExpr, aggs, selClause.getSelectValues());
     }
 
 

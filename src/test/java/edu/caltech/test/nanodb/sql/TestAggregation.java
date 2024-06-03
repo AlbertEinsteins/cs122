@@ -50,8 +50,8 @@ public class TestAggregation extends SqlTestCase {
         TupleLiteral[] expected2 = {
             createTupleFromNum( 3700000 )
         };
-        assert checkSizeResults(expected2, result);
         assert checkOrderedResults(expected2, result);
+        assert checkSizeResults(expected2, result);
     }
 
     /**

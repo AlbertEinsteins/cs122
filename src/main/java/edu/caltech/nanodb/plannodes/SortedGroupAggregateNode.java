@@ -42,7 +42,7 @@ public class SortedGroupAggregateNode extends GroupAggregateNode {
 
     public SortedGroupAggregateNode(PlanNode subplan,
         List<Expression> groupByExprs, Map<String, FunctionCall> aggregates) {
-        super(subplan, groupByExprs, aggregates);
+        super(subplan, groupByExprs, aggregates, null);
 
         // Compute the order-by expressions based on the grouping expressions.
         orderByExprs = new ArrayList<>();
